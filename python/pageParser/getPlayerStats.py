@@ -1,18 +1,32 @@
 from bs4 import BeautifulSoup
 import urllib 
 
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
+
 class pageParser(object):
     def __init__(self, url="http://espn.go.com/golf/players"):
         self.url = url
-        self.page = self.get_page()
-        self.rows = self.get_player_entries()
-        self.playerMd = self.get_player_md()
+        self.playerMd = {}
+        trlist = self.get_page()
+        for chunk in chunks(trlist[1:-1], 50):
+            nchunk = [trlist[0],]+chunk+[trlist[-1],]
+            pagestr = "</tr>\n".join(nchunk)
+            self.page = BeautifulSoup(pagestr)
+            self.rows = self.get_player_entries()
+            self.playerMd.update(self.get_player_md())
 
     def get_page(self):
-        response = urllib.urlopen(self.url)
-        soup = BeautifulSoup(response)
-        soup.unicode
-        return soup
+        #response = urllib.urlopen(self.url)
+        fh = open('data/espn_players.html')
+        pagestr = unicode()
+        for l in fh:
+            els = l.split('</tr>')
+            if len(els) > 1:
+                return els
 
     def get_player_entries(self):
         div = self.page.find(id='my-players-table')

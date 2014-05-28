@@ -34,7 +34,7 @@ class pageParser(object):
             self.rows = self.get_player_entries()
             self.playerMd.update(self.get_player_md())
         self.playerInfo = self.get_player_info()
-        self.acriveKey = None
+        self.activeKey = None
 
     def get_page(self):
         #response = urllib.urlopen(self.url)
@@ -83,6 +83,7 @@ class pageParser(object):
                         #Ignore entries that don't correspond to an int year
                         continue
         for k in yrUrls:
+            print "year", yrUrls[k]
             response = urllib.urlopen(yrUrls[k])
             ypage = BeautifulSoup(response)
             sels = ypage.find_all('select')
@@ -92,13 +93,15 @@ class pageParser(object):
                     for opt in opts:
                         if not opt['value']:
                             continue
-                        print k, opt['value']
+                        print 'tourn', opt['value']
+                        '''
                         response = urllib.urlopen(opt['value'])
                         tpage = BeautifulSoup(response)
                         for rnd in (1,2,3,4):
                             rdiv = tpage.find(id='round-%i-%s'%(rnd, self.activeKey))
                             if rdiv:
                                 self.parse_round(rdiv)
+                        '''
 
     def parse_round(self, div):
         trs = div.find_all('tr')
@@ -110,7 +113,6 @@ class pageParser(object):
             print " ".join([ss for ss in txt.stripped_strings]), score.text
         for txt, score in zip(trs[2].find_all('td')[1:], trs[3].find_all('td')[1:]):
             print " ".join([ss for ss in txt.stripped_strings]), score.text
-        import pdb;pdb.set_trace()
 
     def get_player_info(self):
         retDict = {}
@@ -130,7 +132,7 @@ class pageParser(object):
                         valtxt = valtxt.lstrip(infoKey)
                         infoKey = sanitizeEntry(infoKey)
                         retDict[k][infoKey] = valtxt
-                        print infoKey, valtxt
+                        #print infoKey, valtxt
             lis = page.find_all('li')
             url = None
             for li in lis:
@@ -138,9 +140,6 @@ class pageParser(object):
                     url = li.a['href']
             self.loop_through_tournaments(BASEURL+url)
         return retDict
-                        
+
 
 pp = pageParser()
-
-for k in pp.playerMd:
-    print pp.playerMd[k]['playerLink']

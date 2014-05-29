@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import posixpath
 import urllib 
 from urlparse import urlsplit
 
@@ -9,11 +10,11 @@ def chunks(l, n):
         yield l[i:i+n]
 
 def readHtmlFile(path):
-    fh = open(path)
     try:
+        fh = open(path)
         pagestr = "".join(fh.readlines())
-    finally:
-        fh.close()
+    except IOError:
+        raise IOError("Couldn't find %s"%(path))
     return pagestr
 
 def sanitizeEntry(entry):
@@ -23,7 +24,7 @@ def sanitizeEntry(entry):
 BASEURL = "http://espn.go.com"
 
 class pageParser(object):
-    def __init__(self, url="http://espn.go.com/golf/players"):
+    def __init__(self, url="http://espn.go.com/golf/players", contentParser=urllib.urlopen, urlSanitizer=lambda x:x):
         self.url = url
         self.playerMd = {}
         trlist = self.get_page()
@@ -33,7 +34,7 @@ class pageParser(object):
             self.page = BeautifulSoup(pagestr)
             self.rows = self.get_player_entries()
             self.playerMd.update(self.get_player_md())
-        self.playerInfo = self.get_player_info()
+        self.playerInfo = self.get_player_info(contentParser, urlSanitizer)
         self.activeKey = None
 
     def get_page(self):
@@ -66,10 +67,22 @@ class pageParser(object):
             playerMd[playerKey] = playerDict
         return playerMd
 
-    def loop_through_tournaments(self, url):
+    def loop_through_tournaments(self, url, contentParser, urlSanitizer):
+        def splitUrl(url):
+            returl = []
+            while url:
+                p, tip = posixpath.split(url)
+                returl.append(tip)
+                url = p
+            return returl
+
         if url is None:
             return
-        response = urllib.urlopen(url)
+        url = urlSanitizer(url)
+        try:
+            response = contentParser(url)
+        except:
+            pass 
         page = BeautifulSoup(response)
         sels = page.find_all('select')
         yrUrls = {}
@@ -83,8 +96,10 @@ class pageParser(object):
                         #Ignore entries that don't correspond to an int year
                         continue
         for k in yrUrls:
-            print "year", yrUrls[k]
-            response = urllib.urlopen(yrUrls[k])
+            try:
+                response = contentParser(urlSanitizer(yrUrls[k]))
+            except:
+                continue
             ypage = BeautifulSoup(response)
             sels = ypage.find_all('select')
             for sel in sels:
@@ -93,15 +108,21 @@ class pageParser(object):
                     for opt in opts:
                         if not opt['value']:
                             continue
-                        print 'tourn', opt['value']
-                        '''
-                        response = urllib.urlopen(opt['value'])
+                        try:
+                            response = contentParser(urlSanitizer(opt['value']))
+                        except:
+                            continue
+                        turl = urlSanitizer(opt['value'])
                         tpage = BeautifulSoup(response)
                         for rnd in (1,2,3,4):
                             rdiv = tpage.find(id='round-%i-%s'%(rnd, self.activeKey))
                             if rdiv:
+                                path = splitUrl(turl)
+                                ididx = path.index('id')
+                                tididx = path.index('tournamentId')
+                                print path, ididx, tididx
+                                print path[ididx-1], path[tididx-1], rnd
                                 self.parse_round(rdiv)
-                        '''
 
     def parse_round(self, div):
         trs = div.find_all('tr')
@@ -114,14 +135,15 @@ class pageParser(object):
         for txt, score in zip(trs[2].find_all('td')[1:], trs[3].find_all('td')[1:]):
             print " ".join([ss for ss in txt.stripped_strings]), score.text
 
-    def get_player_info(self):
+    def get_player_info(self, contentParser, urlSanitizer):
         retDict = {}
         for k in self.playerMd:
             self.activeKey = k
             retDict[k] = {}
             #response = urllib.urlopen(self.playerMd[k]['playerLink'])
-            pname = self.playerMd[k]['playerLink'].split("/")[-1]
-            page = BeautifulSoup(readHtmlFile("data/%s"%(pname)))
+            #pname = self.playerMd[k]['playerLink'].split("/")[-1]
+            response = contentParser(urlSanitizer(self.playerMd[k]['playerLink']))
+            page = BeautifulSoup(response)
             uls = page.find_all('ul')
             for ul in uls:
                 if 'class' in ul.attrs and ul.attrs['class'][0] == 'player-metadata':
@@ -138,8 +160,12 @@ class pageParser(object):
             for li in lis:
                 if li.text == "Scorecards":
                     url = li.a['href']
-            self.loop_through_tournaments(BASEURL+url)
+            self.loop_through_tournaments(BASEURL+url, contentParser, urlSanitizer)
         return retDict
 
-
-pp = pageParser()
+def parseUrlToPath(url):
+    parsedUrl = urlsplit(url)
+    return 'data'+parsedUrl.path
+pp = pageParser(contentParser=readHtmlFile, urlSanitizer=parseUrlToPath)
+for k in pp.playerMd:
+    print pp.playerMd[k]['playerLink']

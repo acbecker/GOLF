@@ -4,6 +4,7 @@ import posixpath
 import urllib 
 from urlparse import urlsplit
 from datetime import date, timedelta
+import warnings
 
 def chunks(l, n):
     """ Yield successive n-sized chunks from l.
@@ -16,7 +17,9 @@ def readHtmlFile(path):
         fh = open(path)
         pagestr = "".join(fh.readlines())
     except IOError:
-        raise IOError("Couldn't find %s"%(path))
+        #raise IOError("Couldn't find %s"%(path))
+        warnings.warn("Couldn't find %s"%(path))
+        pagestr = ""
     return pagestr
 
 def sanitizeEntry(entry):
@@ -126,7 +129,7 @@ class pageParser(object):
         #We may be missing urls
         except:
             print url
-            continue
+            return
         page = BeautifulSoup(response)
         sels = page.find_all('select')
         yrUrls = {}
@@ -175,8 +178,8 @@ class pageParser(object):
                                 scores = self.parse_round(rdiv)
                                 insrt = []
                                 for i in range(1, 19):
-                                    insrt.append((playerId, tournId, rnd, i, scores[i]['par'], scores[i]['length'], 
-                                                  scores[i]['score'], course, begdate+timedelta(days=rnd-1)))
+                                    insrt.append((playerId, tournId, rnd, i, scores[i]['score'], scores[i]['par'],
+                                                  scores[i]['length'], course, begdate+timedelta(days=rnd-1)))
                                 self.insertScores(insrt)
 
     def insertScores(self, insarr):
@@ -235,7 +238,8 @@ class pageParser(object):
             for li in lis:
                 if li.text == "Scorecards":
                     url = li.a['href']
-            self.loop_through_tournaments(BASEURL+url, contentParser, urlSanitizer)
+            if url:
+                self.loop_through_tournaments(BASEURL+url, contentParser, urlSanitizer)
         return retDict
 
 def parseUrlToPath(url):
